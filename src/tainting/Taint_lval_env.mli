@@ -61,6 +61,7 @@ val add : add_fn
 (* THINK: Perhaps keep propagators outside of this environment? *)
 val propagate_to : Dataflow_var_env.var -> Taint.taints -> env -> env
 val find_var_opt : env -> IL.name -> Taint_shape.ref option
+val find_lval : env -> IL.lval -> Taint_shape.ref option
 
 val find_lval_xtaint :
   env -> IL.lval -> [ `Clean | `None | `Tainted of Taint.taints ]

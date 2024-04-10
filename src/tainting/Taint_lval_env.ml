@@ -17,6 +17,7 @@
  * to ensure that lvals satisfy IL_helpers.lval_is_var_and_dots, but rather handle
  * that internally. *)
 
+open Common
 module T = Taint
 module Taints = T.Taint_set
 module S = Taint_shape
@@ -261,6 +262,11 @@ let propagate_to prop_var taints env =
           ~add
 
 let find_var_opt { tainted; _ } var = NameMap.find_opt var tainted
+
+let find_lval { tainted; _ } lval =
+  let* var, offsets = normalize_lval lval in
+  let* var_ref = NameMap.find_opt var tainted in
+  S.find_in_ref offsets var_ref
 
 let find_lval_xtaint { tainted; _ } lval =
   match normalize_lval lval with
