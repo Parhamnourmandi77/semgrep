@@ -64,7 +64,7 @@ and obj = ref Fields.t
 (* Helpers *)
 (*****************************************************************************)
 
-(* Violates INVARIANT(ref), see 'unsafe_find_offset_in_obj *)
+(* UNSAFE: Violates INVARIANT(ref), see 'unsafe_find_offset_in_obj *)
 let ref_none_bot = Ref (`None, Bot)
 
 (* Temporarily breaks 'unsafe_find_offset_in_obj' by initializing a field with a
@@ -122,6 +122,24 @@ and show_obj obj =
   |> List.of_seq |> String.concat "; "
 
 (*****************************************************************************)
+(* Object shapes *)
+(*****************************************************************************)
+
+let tuple_like_obj taints_and_shapes : obj =
+  let _index, obj =
+    taints_and_shapes
+    |> List.fold_left
+         (fun (i, obj) (taints, shape) ->
+           let xtaint =
+             if Taints.is_empty taints then `None else `Tainted taints
+           in
+           let ref = Ref (xtaint, shape) in
+           (i + 1, Fields.add (T.Oint i) ref obj))
+         (0, Fields.empty)
+  in
+  obj
+
+(*****************************************************************************)
 (* Union (merging shapes) *)
 (*****************************************************************************)
 
@@ -167,9 +185,46 @@ let union_taints_in_ref =
   go_ref Taints.empty
 
 (*****************************************************************************)
-(* Find xtaint for an offset *)
+(* Find an offset *)
 (*****************************************************************************)
 
+let rec find_in_ref offset ref =
+  let (Ref (_xtaint, shape)) = ref in
+  match offset with
+  | [] -> Some ref
+  | _ :: _ -> find_in_shape offset shape
+
+and find_in_shape offset = function
+  (* offset <> [] *)
+  | Bot -> None
+  | Obj obj -> find_in_obj offset obj
+
+and find_in_obj offset obj =
+  (* offset <> [] *)
+  match offset with
+  | [] ->
+      Logs.debug (fun m ->
+          m ~tags:error "fix_xtaint_obj: Impossible happened: empty offset");
+      None
+  | o :: offset -> (
+      match T.offset_of_IL o with
+      | Oany (* arbitrary index [*] *) ->
+          (* consider all fields/indexes *)
+          Fields.fold
+            (fun _ ref acc ->
+              match (acc, find_in_ref offset ref) with
+              | None, None -> None
+              | Some ref, None
+              | None, Some ref ->
+                  Some ref
+              | Some ref1, Some ref2 -> Some (union_ref ref1 ref2))
+            obj None
+      | o -> (
+          match Fields.find_opt o obj with
+          | None -> None
+          | Some o_ref -> find_in_ref offset o_ref))
+
+(* TODO: Define in terms of 'find_in_ref', what about the `[*]` case ? *)
 let rec find_xtaint_ref offset ref =
   let (Ref (xtaint, shape)) = ref in
   match offset with

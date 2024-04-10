@@ -62,7 +62,8 @@ val add : add_fn
 val propagate_to : Dataflow_var_env.var -> Taint.taints -> env -> env
 val find_var_opt : env -> IL.name -> Taint_shape.ref option
 
-val dumb_find : env -> IL.lval -> [ `Clean | `None | `Tainted of Taint.taints ]
+val find_lval_xtaint :
+  env -> IL.lval -> [ `Clean | `None | `Tainted of Taint.taints ]
 (** Look up an l-value on the environemnt and return whether it's tainted, clean,
     or we hold no info about it. It does not check sub-lvalues, e.g. if we record
     that 'x.a' is tainted but had no explicit info about 'x.a.b', checking for

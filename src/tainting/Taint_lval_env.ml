@@ -262,7 +262,7 @@ let propagate_to prop_var taints env =
 
 let find_var_opt { tainted; _ } var = NameMap.find_opt var tainted
 
-let dumb_find { tainted; _ } lval =
+let find_lval_xtaint { tainted; _ } lval =
   match normalize_lval lval with
   | None -> `None
   | Some (var, offsets) -> (

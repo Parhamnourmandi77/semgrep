@@ -62,6 +62,7 @@ and obj = ref Fields.t
 
 val equal_ref : ref -> ref -> bool
 val show_ref : ref -> string
+val tuple_like_obj : (Taint.taints * shape) list -> obj
 
 val union_ref : ref -> ref -> ref
 (** Merge refs at JOIN nodes of the CFG. *)
@@ -69,6 +70,7 @@ val union_ref : ref -> ref -> ref
 val union_taints_in_ref : ref -> Taint.taints
 (** Collect and union all taints reachable via a ref. *)
 
+val find_in_ref : IL.offset list -> ref -> ref option
 val find_xtaint_ref : IL.offset list -> ref -> Xtaint.t
 
 val taint_ref : Taint.taints -> IL.offset list -> ref -> ref
