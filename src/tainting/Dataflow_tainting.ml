@@ -1650,16 +1650,16 @@ let check_function_call_callee env e = check_tainted_expr env e
 
 (* Test whether an instruction is tainted, and if it is also a sink,
  * report the result too (by side effect). *)
-let check_tainted_instr env instr : Taints.t * Lval_env.t =
+let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
   let check_expr env = check_tainted_expr env in
   let check_instr = function
     | Assign (_, e) ->
-        let taints, _TODOshape, lval_env = check_expr env e in
+        let taints, shape, lval_env = check_expr env e in
         let taints =
           check_type_and_drop_taints_if_bool_or_number env taints type_of_expr e
         in
-        (taints, lval_env)
-    | AssignAnon _ -> (Taints.empty, env.lval_env) (* TODO *)
+        (taints, shape, lval_env)
+    | AssignAnon _ -> (Taints.empty, S.Bot, env.lval_env) (* TODO *)
     | Call (_, e, args) ->
         let args_taints, all_args_taints, lval_env =
           check_function_call_arguments env args
@@ -1711,7 +1711,7 @@ let check_tainted_instr env instr : Taints.t * Lval_env.t =
           check_type_and_drop_taints_if_bool_or_number env all_call_taints
             type_of_expr e
         in
-        (all_call_taints, lval_env)
+        (all_call_taints, S.Bot (* TODO *), lval_env)
     | New (_lval, _ty, Some constructor, args) -> (
         (* 'New' with reference to constructor, although it doesn't mean it has been resolved. *)
         let args_taints, all_args_taints, lval_env =
@@ -1721,15 +1721,19 @@ let check_tainted_instr env instr : Taints.t * Lval_env.t =
           check_function_signature { env with lval_env } constructor args
             args_taints
         with
-        | Some (call_taints, lval_env) -> (call_taints, lval_env)
-        | None -> (all_args_taints, lval_env))
+        | Some (call_taints, lval_env) ->
+            (call_taints, S.Bot (* TODO *), lval_env)
+        | None -> (all_args_taints, S.Bot, lval_env))
     | New (_lval, _ty, None, args) ->
         (* 'New' without reference to constructor *)
-        args
-        |> List_.map IL_helpers.exp_of_arg
-        |> union_map_taints_and_vars env (fun env e ->
-               let a, _TODOshape, b = check_expr env e in
-               (a, b))
+        let taints, lval_env =
+          args
+          |> List_.map IL_helpers.exp_of_arg
+          |> union_map_taints_and_vars env (fun env e ->
+                 let a, _TODOshape, b = check_expr env e in
+                 (a, b))
+        in
+        (taints, S.Bot (* TODO *), lval_env)
     | CallSpecial (_, _, args) ->
         let _, taints, lval_env = check_function_call_arguments env args in
         let taints =
@@ -1737,17 +1741,17 @@ let check_tainted_instr env instr : Taints.t * Lval_env.t =
             Taints.empty
           else taints
         in
-        (taints, lval_env)
-    | FixmeInstr _ -> (Taints.empty, env.lval_env)
+        (taints, S.Bot, lval_env)
+    | FixmeInstr _ -> (Taints.empty, S.Bot, env.lval_env)
   in
   let sanitizer_pms = orig_is_best_sanitizer env instr.iorig in
   match sanitizer_pms with
   (* See NOTE [is_sanitizer] *)
   | _ :: _ ->
       (* TODO: We should check that taint and sanitizer(s) are unifiable. *)
-      (Taints.empty, env.lval_env)
+      (Taints.empty, S.Bot, env.lval_env)
   | [] ->
-      let taints_instr, lval_env = check_instr instr.i in
+      let taints_instr, rhs_shape, lval_env = check_instr instr.i in
       let taint_sources, lval_env =
         orig_is_best_source env instr.iorig
         |> taints_of_matches { env with lval_env } ~incoming:taints_instr
@@ -1765,7 +1769,7 @@ let check_tainted_instr env instr : Taints.t * Lval_env.t =
             check_type_and_drop_taints_if_bool_or_number env taints type_of_lval
               lval
       in
-      (taints, lval_env)
+      (taints, rhs_shape, lval_env)
 
 (* Test whether a `return' is tainted, and if it is also a sink,
  * report the result too (by side effect). *)
@@ -1876,7 +1880,7 @@ let transfer :
   let out' : Lval_env.t =
     match node.F.n with
     | NInstr x ->
-        let taints, lval_env' = check_tainted_instr env x in
+        let taints, _TODOshape, lval_env' = check_tainted_instr env x in
         let opt_lval = LV.lval_of_instr_opt x in
         let lval_env' =
           match opt_lval with
