@@ -133,8 +133,11 @@ let tuple_like_obj taints_and_shapes : obj =
            let xtaint =
              if Taints.is_empty taints then `None else `Tainted taints
            in
-           let ref = Ref (xtaint, shape) in
-           (i + 1, Fields.add (T.Oint i) ref obj))
+           match (xtaint, shape) with
+           | `None, Bot -> (* See INVARIANT(ref) *) (i + 1, obj)
+           | __else__ ->
+               let ref = Ref (xtaint, shape) in
+               (i + 1, Fields.add (T.Oint i) ref obj))
          (0, Fields.empty)
   in
   obj

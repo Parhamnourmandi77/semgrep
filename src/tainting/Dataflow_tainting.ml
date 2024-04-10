@@ -65,6 +65,7 @@ let base_tag_strings = [ __MODULE__; "taint" ]
 let _tags = Logs_.create_tags base_tag_strings
 let sigs = Logs_.create_tags (base_tag_strings @ [ "taint_sigs" ])
 let transfer = Logs_.create_tags (base_tag_strings @ [ "taint_transfer" ])
+let debug = Logs_.create_tags (base_tag_strings @ [ "taint_debug" ])
 let error = Logs_.create_tags (base_tag_strings @ [ "error" ])
 
 (*****************************************************************************)
@@ -1881,6 +1882,8 @@ let transfer :
     match node.F.n with
     | NInstr x ->
         let taints, _TODOshape, lval_env' = check_tainted_instr env x in
+        Logs.debug (fun m ->
+            m ~tags:debug "!!! Instr RHS shape: %s" (S.show_shape _TODOshape));
         let opt_lval = LV.lval_of_instr_opt x in
         let lval_env' =
           match opt_lval with

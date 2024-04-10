@@ -1,4 +1,5 @@
 open IL
+module G = AST_generic
 
 let string_of_type (ty : G.type_) =
   match ty.t with
@@ -14,6 +15,12 @@ let string_of_base base =
 let string_of_offset offset =
   match offset.o with
   | Dot a -> ident_str_of_name a
+  | Index { e = Literal (G.Int parsed_int); _ } -> (
+      match Parsed_int.to_int_opt parsed_int with
+      | Some i -> Common.spf "[%d]" i
+      | None -> "[...]")
+  | Index { e = Literal (G.String (_, (str, _), _)); _ } ->
+      Common.spf "[\"%s\"]" str
   | Index _ -> "[...]"
 
 let string_of_offset_list offset =

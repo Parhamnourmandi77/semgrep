@@ -62,6 +62,7 @@ and obj = ref Fields.t
 
 val equal_ref : ref -> ref -> bool
 val show_ref : ref -> string
+val show_shape : shape -> string
 val tuple_like_obj : (Taint.taints * shape) list -> obj
 
 val union_ref : ref -> ref -> ref
