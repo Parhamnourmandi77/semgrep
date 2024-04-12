@@ -1266,7 +1266,13 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
   | None ->
       let taints, shape, lval_env =
         match exp.e with
-        | Fetch lval -> check_tainted_lval env lval
+        | Fetch lval ->
+            let t, s, e = check_tainted_lval env lval in
+            Logs.debug (fun m ->
+                m ~tags:debug "LVAL %s -> %s & %s"
+                  (Display_IL.string_of_lval lval)
+                  (T.show_taints t) (S.show_shape s));
+            (t, s, e)
         | __else__ ->
             let taints_exp, shape, lval_env = check_subexpr exp in
             let taints_sources, lval_env =
@@ -1881,9 +1887,9 @@ let transfer :
   let out' : Lval_env.t =
     match node.F.n with
     | NInstr x ->
-        let taints, _TODOshape, lval_env' = check_tainted_instr env x in
+        let taints, shape, lval_env' = check_tainted_instr env x in
         Logs.debug (fun m ->
-            m ~tags:debug "!!! Instr RHS shape: %s" (S.show_shape _TODOshape));
+            m ~tags:debug "!!! Instr RHS shape: %s" (S.show_shape shape));
         let opt_lval = LV.lval_of_instr_opt x in
         let lval_env' =
           match opt_lval with
@@ -1900,31 +1906,31 @@ let transfer :
           | None -> lval_env'
         in
         let lval_env' =
-          let has_taints = not (Taints.is_empty taints) in
           match opt_lval with
-          | Some lval ->
-              if has_taints then
-                (* Instruction returns tainted data, add taints to lval.
-                 * See [Taint_lval_env] for details. *)
-                lval_env' |> Lval_env.add lval taints
-              else
-                (* The RHS returns no taint, but taint could propagate by
-                 * side-effect too. So, we check whether the taint assigned
-                 * to 'lval' has changed to determine whether we need to
-                 * clean 'lval' or not. *)
-                let lval_taints_changed =
-                  not (Lval_env.equal_by_lval in' lval_env' lval)
-                in
-                if lval_taints_changed then
-                  (* The taint of 'lval' has changed, so there was a source or
-                   * sanitizer acting by side-effect on this instruction. Thus we do NOT
-                   * do anything more here. *)
-                  lval_env'
-                else
-                  (* No side-effects on 'lval', and the instruction returns safe data,
-                   * so we assume that the assigment acts as a sanitizer and therefore
-                   * remove taints from lval. See [Taint_lval_env] for details. *)
-                  Lval_env.clean lval_env' lval
+          | Some lval -> (
+              match (Taints.is_empty taints, shape) with
+              | true, S.Bot ->
+                  (* The RHS returns no taint, but taint could propagate by
+                   * side-effect too. So, we check whether the taint assigned
+                   * to 'lval' has changed to determine whether we need to
+                   * clean 'lval' or not. *)
+                  let lval_taints_changed =
+                    not (Lval_env.equal_by_lval in' lval_env' lval)
+                  in
+                  if lval_taints_changed then
+                    (* The taint of 'lval' has changed, so there was a source or
+                     * sanitizer acting by side-effect on this instruction. Thus we do NOT
+                     * do anything more here. *)
+                    lval_env'
+                  else
+                    (* No side-effects on 'lval', and the instruction returns safe data,
+                     * so we assume that the assigment acts as a sanitizer and therefore
+                     * remove taints from lval. See [Taint_lval_env] for details. *)
+                    Lval_env.clean lval_env' lval
+              | __else__ ->
+                  (* Instruction returns tainted data, add taints to lval.
+                   * See [Taint_lval_env] for details. *)
+                  lval_env' |> Lval_env.add_shape lval taints shape)
           | None ->
               (* Instruction returns 'void' or its return value is ignored. *)
               lval_env'

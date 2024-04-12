@@ -14,6 +14,7 @@
  *)
 
 open Common
+module G = AST_generic
 module T = Taint
 module Taints = T.Taint_set
 
@@ -193,10 +194,17 @@ let union_taints_in_ref =
 (*****************************************************************************)
 
 let rec find_in_ref offset ref =
-  let (Ref (_xtaint, shape)) = ref in
-  match offset with
-  | [] -> Some ref
-  | _ :: _ -> find_in_shape offset shape
+  let (Ref (xtaint, shape)) = ref in
+  match (offset, shape) with
+  | [], Obj obj when Fields.cardinal obj =|= 1 && Fields.mem Oany obj ->
+      (* Backwards compatibility "hack"
+       * If it's an object where all fields are tainted, we also add
+       * the taint here. *)
+      let (Ref (index_xtaint, _)) = Fields.find Oany obj in
+      let xtaint = Xtaint.union xtaint index_xtaint in
+      Some (Ref (xtaint, shape))
+  | [], _ -> Some ref
+  | _ :: _, _ -> find_in_shape offset shape
 
 and find_in_shape offset = function
   (* offset <> [] *)
@@ -231,9 +239,15 @@ and find_in_obj offset obj =
 (* TODO: Define in terms of 'find_in_ref', what about the `[*]` case ? *)
 let rec find_xtaint_ref offset ref =
   let (Ref (xtaint, shape)) = ref in
-  match offset with
-  | [] -> xtaint
-  | _ :: _ -> find_xtaint_shape offset shape
+  (* TODO: Would need to do this in 'find_in_ref' too *)
+  match (offset, shape) with
+  | [], Obj obj when Fields.cardinal obj =|= 1 && Fields.mem Oany obj ->
+      (* If it's an object where all fields are tainted, we also add
+       * the taint here. *)
+      let (Ref (index_xtaint, _)) = Fields.find Oany obj in
+      Xtaint.union xtaint index_xtaint
+  | [], _ -> xtaint
+  | _ :: _, _ -> find_xtaint_shape offset shape
 
 and find_xtaint_shape offset = function
   (* offset <> [] *)
@@ -267,7 +281,9 @@ and find_xtaint_obj offset obj =
 
 let rec unsafe_update_ref f offset ref =
   match (ref, offset) with
-  | Ref (xtaint, shape), [] -> Ref (f xtaint, shape)
+  | Ref (xtaint, shape), [] ->
+      let xtaint, shape = f xtaint shape in
+      Ref (xtaint, shape)
   | Ref (xtaint, shape), _ :: _ ->
       let shape = unsafe_update_shape f offset shape in
       Ref (xtaint, shape)
@@ -299,28 +315,37 @@ and unsafe_update_obj f offset obj =
 (* Tainting an offset *)
 (*****************************************************************************)
 
-let taint_ref new_taints offset ref =
-  let add_new_taints = function
+let unify_ref_shape new_taints new_shape offset ref =
+  let new_taints =
+    (* TODO: Probably Dataflow_tainting should be returning this. *)
+    if Taints.is_empty new_taints then `None else `Tainted new_taints
+  in
+  let add_new_taints xtaint shape =
+    let shape = union_shape new_shape shape in
+    match xtaint with
     | `None
     | `Clean ->
-        `Tainted new_taints
-    | `Tainted taints ->
+        (* Assumption: either new_taints has taint or shape has taints somewhere *)
+        (new_taints, shape)
+    | `Tainted taints as xtaint ->
         if
           !Flag_semgrep.max_taint_set_size =|= 0
           || Taints.cardinal taints < !Flag_semgrep.max_taint_set_size
-        then `Tainted (Taints.union new_taints taints)
+        then (Xtaint.union new_taints xtaint, shape)
         else (
           Logs.debug (fun m ->
               m ~tags:warning
                 "Already tracking too many taint sources for %s, will not \
                  track more"
                 (Display_IL.string_of_offset_list offset));
-          `Tainted taints)
+          (`Tainted taints, shape))
   in
-  if Taints.is_empty new_taints then
-    Logs.debug (fun m ->
-        m ~tags:error "taint_ref: Impossible happened: empty taint set");
+  (* if Taints.is_empty new_taints then
+     Logs.debug (fun m ->
+         m ~tags:error "taint_ref: Impossible happened: empty taint set"); *)
   unsafe_update_ref add_new_taints offset ref
+
+let taint_ref new_taints offset ref = unify_ref_shape new_taints Bot offset ref
 
 (*****************************************************************************)
 (* Clean taint *)
@@ -336,6 +361,10 @@ let rec clean_ref offset ref =
        *  and just clean it all ? And we would also need to remove the 'Clean'
        *  mark from other refs that may be pointing to this ref in order to
        *  maintain the invariant ? *)
+      Ref (`Clean, Bot)
+  | [ { IL.o = IL.Index { e = Operator ((G.Mult, _), []); _ }; _ } ] ->
+      (* If an object is tainted, and we clean all its indexes, then we instead
+       * clean the object itself. *)
       Ref (`Clean, Bot)
   | _ :: _ ->
       let shape = clean_shape offset shape in

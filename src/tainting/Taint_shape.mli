@@ -73,6 +73,7 @@ val union_taints_in_ref : ref -> Taint.taints
 
 val find_in_ref : IL.offset list -> ref -> ref option
 val find_xtaint_ref : IL.offset list -> ref -> Xtaint.t
+val unify_ref_shape : Taint.taints -> shape -> IL.offset list -> ref -> ref
 
 val taint_ref : Taint.taints -> IL.offset list -> ref -> ref
 (** [taint_ref taints offset ref] adds 'taints' to the 'offset' in 'ref'.  *)

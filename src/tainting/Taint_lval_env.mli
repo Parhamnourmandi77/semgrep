@@ -46,6 +46,7 @@ val hook_normalize_rev_offset : (IL.offset list -> IL.offset list) option ref
 
 val empty : env
 val empty_inout : env Dataflow_core.inout
+val add_shape : IL.lval -> Taint.taints -> Taint_shape.shape -> env -> env
 
 val add : add_fn
 (** Add taints to an l-value.
