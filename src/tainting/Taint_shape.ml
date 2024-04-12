@@ -149,6 +149,7 @@ let tuple_like_obj taints_and_shapes : obj =
 let rec union_ref ref1 ref2 =
   let (Ref (xtaint1, shape1)) = ref1 in
   let (Ref (xtaint2, shape2)) = ref2 in
+  (* TODO: Apply 'Flag_semgrep.max_taint_set_size' here too ? *)
   let xtaint = Xtaint.union xtaint1 xtaint2 in
   let shape = union_shape shape1 shape2 in
   Ref (xtaint, shape)
