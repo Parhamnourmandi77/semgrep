@@ -71,6 +71,7 @@ val union_ref : ref -> ref -> ref
 val union_taints_in_ref : ref -> Taint.taints
 (** Collect and union all taints reachable via a ref. *)
 
+val union_taints_in_shape : shape -> Taint.taints
 val find_in_ref : IL.offset list -> ref -> ref option
 val find_xtaint_ref : IL.offset list -> ref -> Xtaint.t
 val unify_ref_shape : Taint.taints -> shape -> IL.offset list -> ref -> ref

@@ -171,23 +171,24 @@ and union_obj obj1 obj2 =
 (*****************************************************************************)
 
 (* THINK: Generalize to "fold" ? *)
+let rec union_taints_in_ref_acc acc ref =
+  let (Ref (xtaint, shape)) = ref in
+  match xtaint with
+  | `Clean ->
+      (* Due to INVARIANT(ref) we can just stop here. *)
+      acc
+  | `None -> union_taints_in_shape_acc acc shape
+  | `Tainted taints -> union_taints_in_shape_acc (Taints.union taints acc) shape
 
-let union_taints_in_ref =
-  let rec go_ref acc ref =
-    let (Ref (xtaint, shape)) = ref in
-    match xtaint with
-    | `Clean ->
-        (* Due to INVARIANT(ref) we can just stop here. *)
-        acc
-    | `None -> go_shape acc shape
-    | `Tainted taints -> go_shape (Taints.union taints acc) shape
-  and go_shape acc = function
-    | Bot -> acc
-    | Obj obj -> go_obj acc obj
-  and go_obj acc obj =
-    Fields.fold (fun _ o_ref acc -> go_ref acc o_ref) obj acc
-  in
-  go_ref Taints.empty
+and union_taints_in_shape_acc acc = function
+  | Bot -> acc
+  | Obj obj -> union_taints_in_obj_acc acc obj
+
+and union_taints_in_obj_acc acc obj =
+  Fields.fold (fun _ o_ref acc -> union_taints_in_ref_acc acc o_ref) obj acc
+
+let union_taints_in_ref = union_taints_in_ref_acc Taints.empty
+let union_taints_in_shape = union_taints_in_shape_acc Taints.empty
 
 (*****************************************************************************)
 (* Find an offset *)

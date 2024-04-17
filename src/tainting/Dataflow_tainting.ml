@@ -568,7 +568,8 @@ let results_of_tainted_return taints return_tok : T.result list =
     in
     [ T.ToReturn (taint_list, return_tok) ]
 
-let check_orig_if_sink env ?filter_sinks orig taints =
+let check_orig_if_sink env ?filter_sinks orig taints shape =
+  let taints = taints |> Taints.union (S.union_taints_in_shape shape) in
   let sinks = orig_is_best_sink env orig in
   let sinks =
     match filter_sinks with
@@ -1279,14 +1280,14 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
               orig_is_best_source env exp.eorig
               |> taints_of_matches { env with lval_env } ~incoming:taints_exp
             in
-            let taints = Taints.union taints_exp taints_sources in
+            let taints = taints_exp |> Taints.union taints_sources in
             let taints_propagated, lval_env =
               handle_taint_propagators { env with lval_env } (`Exp exp) taints
             in
             let taints = Taints.union taints taints_propagated in
             (taints, shape, lval_env)
       in
-      check_orig_if_sink env exp.eorig taints;
+      check_orig_if_sink env exp.eorig taints shape;
       (taints, shape, lval_env)
 
 (* Check the actual arguments of a function call. This also handles left-to-right
@@ -1674,6 +1675,11 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
         let e_taints, _TODOshape, lval_env =
           check_function_call_callee { env with lval_env } e
         in
+        let shapeTODO =
+          (* TODO: This is like all the arguments are sinks, so what's the shape
+           * of "all the arguments"? *)
+          S.Bot
+        in
         (* NOTE(sink_has_focus):
          * After we made sink specs "exact" by default, we need this trick to
          * be backwards compatible wrt to specifications like `sink(...)`. Even
@@ -1683,7 +1689,7 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
          * still report `sink(tainted)`.
          *)
         check_orig_if_sink { env with lval_env } instr.iorig all_args_taints
-          ~filter_sinks:(fun m ->
+          shapeTODO ~filter_sinks:(fun m ->
             not (m.spec.sink_exact && m.spec.sink_has_focus));
         let call_taints, lval_env =
           match
@@ -1768,7 +1774,7 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
         handle_taint_propagators { env with lval_env } (`Ins instr) taints
       in
       let taints = Taints.union taints taints_propagated in
-      check_orig_if_sink env instr.iorig taints;
+      check_orig_if_sink env instr.iorig taints rhs_shape;
       let taints =
         match LV.lval_of_instr_opt instr with
         | None -> taints
@@ -1896,12 +1902,12 @@ let transfer :
           | Some lval ->
               (* We call `check_tainted_lval` here because the assigned `lval`
                * itself could be annotated as a source of taint. *)
-              let taints, _TODOshape, lval_env' =
+              let taints, lval_shape, lval_env' =
                 check_tainted_lval { env with lval_env = lval_env' } lval
               in
               (* We check if the instruction is a sink, and if so the taints
                * from the `lval` could make a finding. *)
-              check_orig_if_sink env x.iorig taints;
+              check_orig_if_sink env x.iorig taints lval_shape;
               lval_env'
           | None -> lval_env'
         in
