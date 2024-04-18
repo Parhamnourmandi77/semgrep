@@ -783,3 +783,6 @@ let taints_of_pms ~incoming pms =
           go (i + 1) taints' pms_left
   in
   go 0 Taint_set.empty pms
+
+let lval_index_any =
+  IL.{ e = Operator (AST_generic.(Mult, fake "*"), []); eorig = NoOrig }

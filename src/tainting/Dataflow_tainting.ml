@@ -1170,11 +1170,11 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
         (* THINK: Always return 'Bot' shape ? *)
         check env e
     | Composite ((CTuple | CArray | CList), (_, es, _)) ->
-        let all_taints, taints_and_shapes, lval_env =
+        let _all_taints, taints_and_shapes, lval_env =
           map_check_expr env check es
         in
         let obj = S.tuple_like_obj taints_and_shapes in
-        (all_taints, Obj obj, lval_env)
+        (Taints.empty, Obj obj, lval_env)
     | Composite (_TODO, (_, es, _)) ->
         let taints, lval_env =
           union_map_taints_and_vars env check_without_shape es

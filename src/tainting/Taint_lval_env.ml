@@ -118,9 +118,6 @@ let is_class_name (name : IL.name) =
   | _, Some _ ->
       false
 
-let lval_index_any =
-  IL.{ e = Operator (AST_generic.(Mult, fake "*"), []); eorig = NoOrig }
-
 (* Reduces an l-value into the form x.a_1. ... . a_N, the resulting l-value may
  * not represent the exact same object as the original l-value, but an
  * overapproximation. For example, the normalized l-value of `x[i]` will be `x`,
@@ -160,7 +157,7 @@ let normalize_lval lval =
                | IL.Dot _ -> Some o
                | IL.Index _ ->
                    (* no index-sensitivity in OSS *)
-                   Some { o with o = IL.Index lval_index_any })
+                   Some { o with o = IL.Index T.lval_index_any })
     | Some normalize_rev_offset -> normalize_rev_offset rev_offset
   in
   Some (base, List.rev rev_offset)

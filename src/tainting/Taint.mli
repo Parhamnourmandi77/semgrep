@@ -277,3 +277,4 @@ type signature = Results.t
 
 val show_result : result -> string
 val show_signature : signature -> string
+val lval_index_any : IL.exp
