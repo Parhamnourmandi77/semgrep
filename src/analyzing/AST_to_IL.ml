@@ -247,7 +247,7 @@ let composite_of_container : G.container_operator -> IL.composite_kind =
   | List -> CList
   | Tuple -> CTuple
   | Set -> CSet
-  | Dict -> CDict
+  | Dict -> assert false (* FIXME *)
 
 let mk_unnamed_args (exps : IL.exp list) = List_.map (fun x -> Unnamed x) exps
 
@@ -535,7 +535,7 @@ and assign_to_record env (tok1, fields, tok2) rhs_exp lhs_orig =
         let fldi = var_of_id_info id1 ii1 in
         let offset = { o = Dot fldi; oorig = NoOrig } in
         let fields = do_fields (offset :: acc_rev_offsets) fields in
-        Field (fldi.ident, mk_e (Record fields) (related_tok tok))
+        Field (fldi.ident, mk_e (RecordOrDict fields) (related_tok tok))
     | field ->
         (* TODO: What other patterns could be nested ? *)
         (* __FIXME_AST_to_IL__: FixmeExp ToDo *)
@@ -546,9 +546,9 @@ and assign_to_record env (tok1, fields, tok2) rhs_exp lhs_orig =
         add_instr env (mk_i (Assign (tmpi_lval, ei)) (related_tok tok1));
         Field (xi, mk_e (Fetch tmpi_lval) (Related (G.Fld field)))
   in
-  let fields : field list = do_fields [] fields in
+  let fields : field_or_entry list = do_fields [] fields in
   (* {x1: E1, ..., xN: En} *)
-  mk_e (Record fields) lhs_orig
+  mk_e (RecordOrDict fields) lhs_orig
 
 (*****************************************************************************)
 (* Expression *)
@@ -797,12 +797,15 @@ and expr_aux env ?(void = false) e_gen =
                  let _eIGNORE = expr env e in
                  ());
           expr env last)
+  | G.Record fields -> record env fields
+  | G.Container (G.Dict, xs) ->
+      let _, xs, _ = xs in
+      dict env xs e_gen
   | G.Container (kind, xs) ->
       let xs = bracket_keep (List_.map (expr env)) xs in
       let kind = composite_kind kind in
       mk_e (Composite (kind, xs)) eorig
   | G.Comprehension _ -> todo (G.E e_gen)
-  | G.Record fields -> record env fields
   | G.Lambda fdef ->
       (* TODO: we should have a use def.f_tok *)
       let tok = G.fake "lambda" in
@@ -996,7 +999,7 @@ and call_special _env (x, tok) =
 and composite_kind = function
   | G.Array -> CArray
   | G.List -> CList
-  | G.Dict -> CDict
+  | G.Dict -> assert false (* FIXME *)
   | G.Set -> CSet
   | G.Tuple -> CTuple
 
@@ -1095,7 +1098,20 @@ and record env ((_tok, origfields, _) as record_def) =
              None
          | G.F _ -> todo (G.E e_gen))
   in
-  mk_e (Record fields) (SameAs e_gen)
+  mk_e (RecordOrDict fields) (SameAs e_gen)
+
+and dict env orig_entries orig =
+  let entries =
+    orig_entries
+    |> List_.map (fun orig_entry ->
+           match orig_entry.G.e with
+           | G.Container (G.Tuple, (_, [ korig; vorig ], _)) ->
+               let ke = expr env korig in
+               let ve = expr env vorig in
+               Entry (ke, ve)
+           | __else__ -> todo (G.E orig))
+  in
+  mk_e (RecordOrDict entries) (SameAs orig)
 
 and xml_expr env xml =
   let attrs =

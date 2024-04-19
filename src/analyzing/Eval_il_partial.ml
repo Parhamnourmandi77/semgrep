@@ -246,7 +246,7 @@ let rec eval (env : G.svalue Dataflow_var_env.t) (exp : IL.exp) : G.svalue =
       | __else__ -> eval_op env op args)
   | Operator (op, args) -> eval_op env op args
   | Composite _
-  | Record _
+  | RecordOrDict _
   | Cast _
   | FixmeExp _ ->
       G.NotCst

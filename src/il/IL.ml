@@ -285,7 +285,7 @@ and exp_kind =
    * with Dot? simpler?
    * This could also be used for Dict.
    *)
-  | Record of field list
+  | RecordOrDict of field_or_entry list
   | Cast of G.type_ * exp
   (* This could be put in call_special, but dumped IL are then less readable
    * (they are too many intermediate _tmp variables then) *)
@@ -295,14 +295,13 @@ and exp_kind =
       * G.any (* fixme source *)
       * exp (* partial translation *) option
 
-and field = Field of ident * exp | Spread of exp
+and field_or_entry = Field of ident * exp | Entry of exp * exp | Spread of exp
 
 and composite_kind =
   | CTuple
   | CArray
   | CList
   | CSet
-  | CDict (* could be merged with Record *)
   | Constructor of name (* OCaml *)
   | Regexp
 

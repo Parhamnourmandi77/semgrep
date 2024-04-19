@@ -1239,11 +1239,13 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
               args_taints
         in
         (op_taints, S.Bot (* TODO *), lval_env)
-    | Record fields ->
+    | RecordOrDict fields ->
         (* TODO *)
         let taints, lval_env =
           union_map_taints_and_vars env
             (fun env -> function
+              | Entry (_FIXME_TODO_ke, ve) ->
+                  check_without_shape env ve (* FIXME *)
               | Field (_, e)
               | Spread e ->
                   check_without_shape env e)
@@ -1406,7 +1408,7 @@ let lval_of_sig_lval fun_exp fparams args_exps (sig_lval : T.lval) :
               { arg_lval with rev_offset = rev_offset @ arg_lval.rev_offset }
             in
             Some (lval, obj)
-        | Record fields, [ Ofld o ] -> (
+        | RecordOrDict fields, [ Ofld o ] -> (
             (* JS: The argument of a function call may be a record expression such as
              * `{x="tainted", y="safe"}`, if 'sig_lval' refers to the `x` field then
              * we want to resolve it to `"tainted"`. *)
@@ -1417,7 +1419,9 @@ let lval_of_sig_lval fun_exp fparams args_exps (sig_lval : T.lval) :
                     * we look for a `fld=lval` field in the record object such that
                     * 'fld' has the same name as 'o'. *)
                    | Field (fld, _) -> fst fld = fst o.ident
-                   | Spread _ -> false)
+                   | Entry _
+                   | Spread _ ->
+                       false)
             with
             | Some (Field (_, { e = Fetch ({ base = Var obj; _ } as lval); _ }))
               ->
