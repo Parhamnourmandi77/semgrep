@@ -63,9 +63,8 @@ let rec string_of_exp_kind e =
         (string_of_exp e2)
   | Operator ((op, _), _) -> Common.spf "<OP %s ...>" (G.show_operator op)
   | FixmeExp _ -> "<FIXME-EXP>"
-  | Composite (_, _)
-  | RecordOrDict _ ->
-      "<RECORD-OR-DICT>"
+  | Composite (_, _) -> "<COMPOSITE>"
+  | RecordOrDict _ -> "<RECORD-OR-DICT>"
   | Cast (_, _) -> "<CAST>"
 
 and string_of_exp e = string_of_exp_kind e.e

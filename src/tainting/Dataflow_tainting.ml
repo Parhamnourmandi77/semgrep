@@ -1181,7 +1181,23 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
         in
         (taints, S.Bot, lval_env)
     | Operator ((op, _), es) ->
-        let _, args_taints, lval_env = check_function_call_arguments env es in
+        (* let _, args_taints, lval_env = check_function_call_arguments env es in *)
+        let args_taints, all_args_taints, lval_env =
+          check_function_call_arguments env es
+        in
+        let all_args_taints_in_shapes =
+          args_taints
+          |> List.fold_left
+               (fun acc arg ->
+                 match arg with
+                 | Named (_, (_, shape))
+                 | Unnamed (_, shape) ->
+                     S.union_taints_in_shape shape |> Taints.union acc)
+               Taints.empty
+        in
+        let args_taints =
+          Taints.union all_args_taints all_args_taints_in_shapes
+        in
         let args_taints =
           if env.options.taint_only_propagate_through_assignments then
             Taints.empty
@@ -1769,7 +1785,20 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
         in
         (taints, S.Bot (* TODO *), lval_env)
     | CallSpecial (_, _, args) ->
-        let _, taints, lval_env = check_function_call_arguments env args in
+        let args_taints, all_args_taints, lval_env =
+          check_function_call_arguments env args
+        in
+        let all_args_taints_in_shapes =
+          args_taints
+          |> List.fold_left
+               (fun acc arg ->
+                 match arg with
+                 | Named (_, (_, shape))
+                 | Unnamed (_, shape) ->
+                     S.union_taints_in_shape shape |> Taints.union acc)
+               Taints.empty
+        in
+        let taints = Taints.union all_args_taints all_args_taints_in_shapes in
         let taints =
           if env.options.taint_only_propagate_through_assignments then
             Taints.empty
