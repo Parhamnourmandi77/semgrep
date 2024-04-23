@@ -579,6 +579,7 @@ let rec filter_ranges (env : env) (xs : (RM.t * MV.bindings list) list)
              let mvalue_to_expr m =
                match Metavariable.mvalue_to_any m with
                | G.E e -> Some e
+               | G.Name n -> Some (N n |> G.e)
                | _ -> None
              in
              match
