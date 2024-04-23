@@ -1169,7 +1169,9 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
         (Taints.empty, S.Bot, env.lval_env)
     | FixmeExp (_, _, Some e) ->
         (* THINK: Always return 'Bot' shape ? *)
-        check env e
+        let taints, shape, lval_env = check env e in
+        let taints = Taints.union taints (S.union_taints_in_shape shape) in
+        (taints, shape, lval_env)
     | Composite ((CTuple | CArray | CList), (_, es, _)) ->
         let _all_taints, taints_and_shapes, lval_env =
           map_check_expr env check es
