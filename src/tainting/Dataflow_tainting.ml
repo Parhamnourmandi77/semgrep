@@ -1156,8 +1156,9 @@ and check_tainted_lval_offset env offset =
 and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
   let check env = check_tainted_expr env in
   let check_without_shape env e =
-    let taints, _shape, lval_env = check env e in
-    (taints, lval_env)
+    let taints, shape, lval_env = check env e in
+    let shape_taints = S.union_taints_in_shape shape in
+    (Taints.union taints shape_taints, lval_env)
   in
   let check_subexpr exp =
     match exp.e with
