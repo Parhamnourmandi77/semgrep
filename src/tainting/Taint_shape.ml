@@ -286,6 +286,15 @@ let rec unsafe_update_ref f offset ref =
       let xtaint, shape = f xtaint shape in
       Ref (xtaint, shape)
   | Ref (xtaint, shape), _ :: _ ->
+      let xtaint =
+        (* If we are tainting an offset of this ref, the ref cannot be
+           considered clean anymore. *)
+        match xtaint with
+        | `Clean -> `None
+        | `None
+        | `Tainted _ ->
+            xtaint
+      in
       let shape = unsafe_update_shape f offset shape in
       Ref (xtaint, shape)
 
