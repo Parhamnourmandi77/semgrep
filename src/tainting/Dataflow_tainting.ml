@@ -1773,17 +1773,38 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
         with
         | Some (call_taints, lval_env) ->
             (call_taints, S.Bot (* TODO *), lval_env)
-        | None -> (all_args_taints, S.Bot, lval_env))
+        | None ->
+            let all_args_taints_in_shapes =
+              args_taints
+              |> List.fold_left
+                   (fun acc arg ->
+                     match arg with
+                     | Named (_, (_, shape))
+                     | Unnamed (_, shape) ->
+                         S.union_taints_in_shape shape |> Taints.union acc)
+                   Taints.empty
+            in
+            ( Taints.union all_args_taints all_args_taints_in_shapes,
+              S.Bot,
+              lval_env ))
     | New (_lval, _ty, None, args) ->
         (* 'New' without reference to constructor *)
-        let taints, lval_env =
-          args
-          |> List_.map IL_helpers.exp_of_arg
-          |> union_map_taints_and_vars env (fun env e ->
-                 let a, _TODOshape, b = check_expr env e in
-                 (a, b))
+        let args_taints, all_args_taints, lval_env =
+          check_function_call_arguments env args
         in
-        (taints, S.Bot (* TODO *), lval_env)
+        let all_args_taints_in_shapes =
+          args_taints
+          |> List.fold_left
+               (fun acc arg ->
+                 match arg with
+                 | Named (_, (_, shape))
+                 | Unnamed (_, shape) ->
+                     S.union_taints_in_shape shape |> Taints.union acc)
+               Taints.empty
+        in
+        ( Taints.union all_args_taints all_args_taints_in_shapes,
+          S.Bot (* TODO *),
+          lval_env )
     | CallSpecial (_, _, args) ->
         let args_taints, all_args_taints, lval_env =
           check_function_call_arguments env args
