@@ -756,13 +756,15 @@ let exp_is_sanitized env exp =
 (* Checks if `thing' is a propagator `from' and if so propagates `taints' through it.
    Checks if `thing` is a propagator `'to' and if so fetches any taints that had been
    previously propagated. Returns *only* the newly propagated taint. *)
-let handle_taint_propagators env thing taints =
+let handle_taint_propagators env thing taints shape =
+  (* FIXME comment is outdated *)
   (* We propagate taints via an auxiliary variable (the propagator id). This is
    * simple but it has limitations, we can only propagate "forward" and, within
    * an instruction node, we can only propagate in the order in which we visit
    * the subexpressions. E.g. in `x.f(y,z)` we can propagate taint from `y` or
    * `z` to `x`, or from `y` to `z`; but we cannot propagate taint from `x` to
    * `y` or `z`, or from `z` to `y`. *)
+  let taints = Taints.union taints (S.union_taints_in_shape shape) in
   let lval_env = env.lval_env in
   let propagators =
     let any =
@@ -1106,6 +1108,7 @@ and check_tainted_lval_aux env (lval : IL.lval) :
       let taints_propagated, lval_env =
         handle_taint_propagators { env with lval_env } (`Lval lval)
           (taints_incoming |> Taints.union taints_from_env)
+          lval_shape
       in
       let new_taints = taints_incoming |> Taints.union taints_propagated in
       let sinks =
@@ -1304,6 +1307,7 @@ and check_tainted_expr env exp : Taints.t * S.shape * Lval_env.t =
             let taints = taints_exp |> Taints.union taints_sources in
             let taints_propagated, lval_env =
               handle_taint_propagators { env with lval_env } (`Exp exp) taints
+                shape
             in
             let taints = Taints.union taints taints_propagated in
             (taints, shape, lval_env)
@@ -1846,6 +1850,7 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
       let taints = Taints.union taints_instr taint_sources in
       let taints_propagated, lval_env =
         handle_taint_propagators { env with lval_env } (`Ins instr) taints
+          rhs_shape
       in
       let taints = Taints.union taints taints_propagated in
       check_orig_if_sink env instr.iorig taints rhs_shape;
