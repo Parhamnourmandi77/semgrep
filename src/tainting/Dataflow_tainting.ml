@@ -988,15 +988,17 @@ and propagate_taint_via_java_getters_and_setters_without_definition env e args
       in
       match args with
       | [] when String.(starts_with ~prefix:"get" method_str) ->
-          check_tainted_lval env (mk_prop_lval ())
+          Some (check_tainted_lval env (mk_prop_lval ()))
       | [ _ ] when String.starts_with ~prefix:"set" method_str ->
           if not (Taints.is_empty all_args_taints) then
-            ( Taints.empty,
-              S.Bot,
-              env.lval_env |> Lval_env.add (mk_prop_lval ()) all_args_taints )
-          else (Taints.empty, S.Bot, env.lval_env)
-      | __else__ -> (Taints.empty, S.Bot, env.lval_env))
-  | __else__ -> (Taints.empty, S.Bot, env.lval_env)
+            Some
+              ( Taints.empty,
+                S.Bot,
+                env.lval_env |> Lval_env.add (mk_prop_lval ()) all_args_taints
+              )
+          else Some (Taints.empty, S.Bot, env.lval_env)
+      | __else__ -> None)
+  | __else__ -> None
 
 and check_tainted_lval_aux env (lval : IL.lval) :
     Taints.t * Xtaint.t_or_sanitized * S.shape * Lval_env.t =
@@ -1683,6 +1685,12 @@ let check_function_signature env fun_exp args
 
 let check_function_call_callee env e = check_tainted_expr env e
 
+(* TODO: IL_helpers ? *)
+let split_last_offset = function
+  | { e = Fetch { base; rev_offset = o :: rev_offset' }; _ } ->
+      Some ({ base; rev_offset = rev_offset' }, o)
+  | __else__ -> None
+
 (* Test whether an instruction is tainted, and if it is also a sink,
  * report the result too (by side effect). *)
 let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
@@ -1740,7 +1748,7 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
             check_function_signature { env with lval_env } e args args_taints
           with
           | Some (call_taints, lval_env) -> (call_taints, lval_env)
-          | None ->
+          | None -> (
               let call_taints =
                 if not (propagate_through_functions env) then Taints.empty
                 else
@@ -1748,15 +1756,29 @@ let check_tainted_instr env instr : Taints.t * S.shape * Lval_env.t =
                      * the taint of its arguments. *)
                   all_args_taints
               in
-              let getter_taints, _TODOshape, lval_env =
-                (* HACK: Java: If we encounter `obj.setX(arg)` we interpret it as
-                 * `obj.x = arg`, if we encounter `obj.getX()` we interpret it as
-                 * `obj.x`. *)
+              match
                 propagate_taint_via_java_getters_and_setters_without_definition
                   { env with lval_env } e args all_args_taints
-              in
-              let call_taints = Taints.union call_taints getter_taints in
-              (call_taints, lval_env)
+              with
+              | Some (getter_taints, _TODOshape, lval_env) ->
+                  (* HACK: Java: If we encounter `obj.setX(arg)` we interpret it as
+                   * `obj.x = arg`, if we encounter `obj.getX()` we interpret it as
+                   * `obj.x`. *)
+                  let call_taints = Taints.union call_taints getter_taints in
+                  (call_taints, lval_env)
+              | None ->
+                  if not (propagate_through_functions env) then
+                    (Taints.empty, lval_env)
+                  else
+                    let obj_taints =
+                      match split_last_offset e with
+                      | None -> Taints.empty
+                      | Some (obj, _) -> (
+                          match Lval_env.find_lval lval_env obj with
+                          | None -> Taints.empty
+                          | Some ref -> S.union_taints_in_ref ref)
+                    in
+                    (call_taints |> Taints.union obj_taints, lval_env))
         in
         (* We add the taint of the function itselt (i.e., 'e_taints') too. *)
         let all_call_taints =

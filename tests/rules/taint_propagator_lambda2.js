@@ -16,3 +16,13 @@ function test2() {
         sink(x)
      })
 }
+
+function test() {
+    const myArray = [tainted, 'ok', 'ok'];
+    const iterator = myArray.values();
+    iterator.forEach((x) => {
+        foobar()
+        //ruleid: test
+        sink(x)
+     })
+}
